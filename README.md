@@ -94,15 +94,70 @@ python -m ecg_receiver.main
 
 ## Troubleshooting
 
+### Connection Issues
+
 - **No COM ports available**:
   - Make sure the ESP32 is properly connected
   - Install the correct USB drivers for your ESP32
   - Try unplugging and reconnecting the USB cable
+  - On Linux, you may need permissions to access serial ports: `sudo usermod -a -G dialout $USER` (then logout/login)
 
-- **Connection issues**:
+- **Connection fails**:
   - Check that the baud rate matches (default: 57600)
   - Ensure no other program is using the serial port
+  - Try different timeout values (the improved version automatically tries multiple timeouts)
   - Verify the ESP32 is sending data in the expected format
+
+- **No data received**:
+  - Check the ESP32 serial monitor to verify it's sending data
+  - Ensure the data format matches: `DATA,timestamp,ecg_value,resp_value,heart_rate,status`
+  - Try different serial port settings (the improved version tries multiple configurations)
+  - Check for loose connections or cable issues
+
+- **Data parsing errors**:
+  - Verify the ESP32 is sending properly formatted CSV data
+  - Check for missing commas or extra characters in the data stream
+  - Enable debug logging to see raw data being received
+
+### Testing Connection
+
+Use the included test script to debug connection issues:
+
+```bash
+python test_connection.py
+```
+
+This script will:
+- List available serial ports
+- Attempt to connect to the first available port
+- Display raw data being received
+- Show connection statistics
+
+### Performance Issues
+
+- **Slow or choppy display**:
+  - The buffer size has been increased to 2000 points (8 seconds of data)
+  - Try reducing the plot update rate if your system is slow
+  - Close other applications that might be using system resources
+
+- **High CPU usage**:
+  - The improved version uses more efficient data handling
+  - Consider reducing the sample rate on the ESP32 side if needed
+
+### Debug Mode
+
+To enable detailed logging, modify the source code to increase verbosity or add print statements to track data flow.
+
+## Improvements in This Version
+
+- **Enhanced connection handling**: Multiple timeout attempts and better error recovery
+- **Thread-safe data processing**: Uses Qt signals for safe GUI updates
+- **Better error messages**: More descriptive error dialogs and status updates
+- **Improved data validation**: Validates data format before processing
+- **Larger data buffer**: 8 seconds of data display instead of 5
+- **Connection testing**: Included test script for debugging
+- **Automatic reconnection attempts**: Basic framework for reconnection (can be extended)
+- **Better resource management**: Proper cleanup of threads and file handles
 
 ## Data Format
 

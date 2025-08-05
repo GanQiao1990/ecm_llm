@@ -3,8 +3,8 @@ Main window for the ECG Receiver application.
 """
 
 from PyQt5.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, 
-                           QPushButton, QComboBox, QHBoxLayout, QLabel)
-from PyQt5.QtCore import QTimer
+                           QPushButton, QComboBox, QHBoxLayout, QLabel, QMessageBox)
+from PyQt5.QtCore import QTimer, pyqtSignal, pyqtSlot
 import pyqtgraph as pg
 import numpy as np
 import time
@@ -17,6 +17,9 @@ from ..core.data_recorder import DataRecorder
 class ECGMainWindow(QMainWindow):
     """Main window for the ECG Receiver application."""
     
+    # Define signals for thread safety
+    data_received = pyqtSignal(str)
+    
     def __init__(self):
         """Initialize the main window."""
         super().__init__()
@@ -25,14 +28,22 @@ class ECGMainWindow(QMainWindow):
         self.serial_handler = SerialHandler()
         self.data_recorder = DataRecorder()
         
-        # Data buffers
-        self.max_points = 1000
+        # Data buffers - increased size for better visualization
+        self.max_points = 2000  # Increased buffer size
         self.time_data = np.zeros(self.max_points)
         self.ecg_data = np.zeros(self.max_points)
         self.pointer = 0
         
-        # Create the time axis (time in seconds, assuming 200Hz sampling rate)
-        self.time_axis = np.linspace(-5, 0, self.max_points)
+        # Create the time axis (time in seconds, 8 seconds of data)
+        self.time_axis = np.linspace(-8, 0, self.max_points)
+        
+        # Connection state
+        self.current_port = None
+        self.packets_received = 0
+        self.last_packet_time = None
+        
+        # Connect signals
+        self.data_received.connect(self.process_data_slot)
         
         # Initialize the UI
         self.init_ui()
@@ -109,21 +120,36 @@ class ECGMainWindow(QMainWindow):
             port = self.port_combo.currentText()
             if not port:
                 self.status_label.setText("Status: No port selected")
+                QMessageBox.warning(self, "Connection Error", "Please select a serial port.")
                 return
                 
+            print(f"Attempting to connect to {port}...")
+            self.current_port = port
+            
             if self.serial_handler.connect(port):
                 self.connect_btn.setText("Disconnect")
                 self.record_btn.setEnabled(True)
                 self.status_label.setText(f"Status: Connected to {port}")
                 
+                # Reset statistics
+                self.packets_received = 0
+                
                 # Clear previous data
                 self.pointer = 0
                 self.ecg_data.fill(0)
                 
-                # Start the data processing thread
-                self.serial_handler.start_reading(self.process_data)
+                print(f"Successfully connected to {port}")
+                
+                # Start the data processing thread with thread-safe callback
+                self.serial_handler.start_reading(self.handle_serial_data)
             else:
                 self.status_label.setText(f"Status: Connection failed")
+                QMessageBox.critical(self, "Connection Error", 
+                                   f"Could not connect to {port}.\n\n"
+                                   "Please check:\n"
+                                   "- Device is connected\n"
+                                   "- Port is not in use\n"
+                                   "- Device drivers are installed")
         else:
             self.disconnect_serial()
     
@@ -158,8 +184,21 @@ class ECGMainWindow(QMainWindow):
         self.record_btn.setText("Start Recording")
         self.status_label.setText("Status: Connected")
     
+    def handle_serial_data(self, data):
+        """Handle data received from serial port (called from worker thread)."""
+        # Emit signal to handle data in main thread
+        self.data_received.emit(data)
+    
+    @pyqtSlot(str)
+    def process_data_slot(self, data):
+        """Process data in the main thread (connected to data_received signal)."""
+        self.process_data(data)
+    
     def process_data(self, data):
         """Process a data line and update the buffers."""
+        current_time = time.time()
+        self.last_packet_time = current_time
+        
         if data.startswith('DATA,'):
             try:
                 # Parse the data line: "DATA,timestamp,ecg,resp,hr,status"
@@ -167,6 +206,9 @@ class ECGMainWindow(QMainWindow):
                 if len(parts) >= 4:  # We need at least timestamp, ecg, resp, hr
                     # Get the ECG value (in microvolts)
                     ecg_value = float(parts[2])
+                    
+                    # Update statistics
+                    self.packets_received += 1
                     
                     # Update data buffer
                     self.ecg_data[self.pointer] = ecg_value
@@ -176,8 +218,18 @@ class ECGMainWindow(QMainWindow):
                     if self.data_recorder.recording:
                         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
                         self.data_recorder.write_data(timestamp, ecg_value)
+                        
             except (ValueError, IndexError) as e:
-                print(f"Error parsing data: {data}")
+                print(f"Error parsing data: {data[:50]}... Error: {e}")
+        
+        elif data.startswith('ERROR,') or data.startswith('INFO,'):
+            # Log system messages
+            print(f"Device: {data}")
+        
+        else:
+            # Log unexpected data format
+            if data.strip():  # Only log non-empty lines
+                print(f"Unknown data format: {data[:50]}...")
     
     def update_plot(self):
         """Update the plot with new data."""

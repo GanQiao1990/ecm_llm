@@ -98,6 +98,9 @@ class DataRecorder:
         
         try:
             self.csv_writer.writerow([timestamp, ecg_value])
+            # Flush data to ensure it's written immediately
+            if self.csv_file:
+                self.csv_file.flush()
             return True
         except Exception as e:
             print(f"Error writing to CSV: {e}")
