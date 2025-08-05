@@ -161,15 +161,57 @@ To enable detailed logging, modify the source code to increase verbosity or add 
 
 ## Data Format
 
-The ESP32 should send data in the following format:
+The ECG receiver now supports multiple data formats:
+
+### Standard Format (Recommended)
 ```
 DATA,timestamp,ecg_value,resp_value,heart_rate,status
 ```
+Example: `DATA,1234567890,1024,512,75,OK`
 
-For example:
+### Simple Numeric Format (Auto-detected)
+If your ESP32 sends simple numeric values (like in your case), the receiver will automatically detect and process them:
 ```
-DATA,1234567890,1024,512,75,OK
+-7
+-6
+-5
+1024
+1050
 ```
+
+### Multiple Values Per Line
+Space or comma separated values:
+```
+1024 512 75
+1050,520,76
+```
+
+## Fixing "Invalid data format" Errors
+
+If you see "Invalid data format" errors like:
+```
+Invalid data format: -7...
+Invalid data format: -6...
+```
+
+**This has been fixed!** The improved version now:
+1. ✓ Automatically detects simple numeric data format
+2. ✓ Processes single values per line (like -7, -6, -5)
+3. ✓ Handles both positive and negative values
+4. ✓ Works with integer and decimal values
+
+### Testing Your Data Format
+
+Use the data format analyzer to see what your ESP32 is sending:
+```bash
+python analyze_data_format.py
+```
+
+This will:
+- Connect to your ESP32 (COM7 or first available port)
+- Show you exactly what data format is being sent
+- Analyze the data rate and format
+- Provide specific recommendations
 
 ## License
 

@@ -199,37 +199,71 @@ class ECGMainWindow(QMainWindow):
         current_time = time.time()
         self.last_packet_time = current_time
         
+        # Handle different data formats
+        ecg_value = None
+        
         if data.startswith('DATA,'):
+            # Standard CSV format: "DATA,timestamp,ecg,resp,hr,status"
             try:
-                # Parse the data line: "DATA,timestamp,ecg,resp,hr,status"
                 parts = data.split(',')
                 if len(parts) >= 4:  # We need at least timestamp, ecg, resp, hr
-                    # Get the ECG value (in microvolts)
                     ecg_value = float(parts[2])
-                    
-                    # Update statistics
-                    self.packets_received += 1
-                    
-                    # Update data buffer
-                    self.ecg_data[self.pointer] = ecg_value
-                    self.pointer = (self.pointer + 1) % self.max_points
-                    
-                    # Save to CSV if recording
-                    if self.data_recorder.recording:
-                        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                        self.data_recorder.write_data(timestamp, ecg_value)
-                        
             except (ValueError, IndexError) as e:
-                print(f"Error parsing data: {data[:50]}... Error: {e}")
-        
+                print(f"Error parsing CSV data: {data[:50]}... Error: {e}")
+                
         elif data.startswith('ERROR,') or data.startswith('INFO,'):
             # Log system messages
             print(f"Device: {data}")
-        
+            return  # Don't process as ECG data
+            
         else:
-            # Log unexpected data format
-            if data.strip():  # Only log non-empty lines
-                print(f"Unknown data format: {data[:50]}...")
+            # Try to parse as simple numeric data
+            try:
+                data_clean = data.strip()
+                
+                # Handle single numeric value (like "-7", "-6", "-5")
+                if data_clean and (data_clean.replace('-', '').replace('.', '').isdigit() or 
+                                   data_clean.replace('-', '').replace('.', '').replace(' ', '').isdigit()):
+                    ecg_value = float(data_clean)
+                    
+                # Handle multiple space/comma separated values
+                else:
+                    parts = data_clean.replace(',', ' ').split()
+                    if 1 <= len(parts) <= 5:  # 1-5 numeric values
+                        # Try each part as potential ECG value
+                        for part in parts:
+                            try:
+                                test_value = float(part.strip())
+                                # Use the first valid numeric value as ECG
+                                if ecg_value is None:
+                                    ecg_value = test_value
+                                break
+                            except ValueError:
+                                continue
+                                
+            except Exception as e:
+                # If we can't parse it at all, just log it
+                if data.strip():  # Only log non-empty lines
+                    print(f"Unknown data format: {data[:50]}...")
+                return
+        
+        # If we successfully extracted an ECG value, process it
+        if ecg_value is not None:
+            # Update statistics
+            self.packets_received += 1
+            
+            # Update data buffer
+            self.ecg_data[self.pointer] = ecg_value
+            self.pointer = (self.pointer + 1) % self.max_points
+            
+            # Save to CSV if recording
+            if self.data_recorder.recording:
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                self.data_recorder.write_data(timestamp, ecg_value)
+                
+            # Optional: Print received values for debugging
+            if self.packets_received % 50 == 0:  # Print every 50th packet
+                print(f"Received ECG value: {ecg_value} (Packet #{self.packets_received})")
     
     def update_plot(self):
         """Update the plot with new data."""

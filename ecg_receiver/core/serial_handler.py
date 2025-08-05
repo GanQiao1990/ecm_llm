@@ -240,7 +240,7 @@ class SerialHandler:
         if not line:
             return False
             
-        # Check for expected data format: "DATA,timestamp,ecg,resp,hr,status"
+        # Check for expected CSV data format: "DATA,timestamp,ecg,resp,hr,status"
         if line.startswith('DATA,'):
             parts = line.split(',')
             if len(parts) >= 4:  # At least DATA, timestamp, ecg, resp
@@ -254,6 +254,26 @@ class SerialHandler:
         # Allow other message types (INFO, ERROR, etc.)
         if any(line.startswith(prefix) for prefix in ['INFO,', 'ERROR,', 'STATUS,', 'DEBUG,']):
             return True
+        
+        # Check for simple numeric data (like "-7", "-6", "-5")
+        line = line.strip()
+        if line and (line.replace('-', '').replace('.', '').isdigit() or 
+                     line.replace('-', '').replace('.', '').replace(' ', '').isdigit()):
+            try:
+                float(line)
+                return True
+            except ValueError:
+                pass
+        
+        # Check for space or comma separated numeric values
+        parts = line.replace(',', ' ').split()
+        if len(parts) >= 1 and len(parts) <= 5:  # 1-5 numeric values
+            try:
+                for part in parts:
+                    float(part.strip())
+                return True
+            except ValueError:
+                pass
             
         return False
     
