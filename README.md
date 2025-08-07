@@ -2,6 +2,9 @@
 
 A comprehensive standalone application for real-time ECG data visualization and AI-powered heart problem diagnosis using Gemini 2.5 Flash model. This system combines real-time ECG monitoring from ADS1292R sensor connected to an ESP32 board with advanced AI analysis for heart condition detection.
 
+<img width="1385" height="936" alt="image" src="https://github.com/user-attachments/assets/efc15333-893b-44dd-88f1-011b1510da83" />
+
+
 ## 🔥 New Features v2.0
 
 - **🤖 AI-Powered Heart Diagnosis**: Real-time heart condition analysis using Gemini 2.5 Flash model
